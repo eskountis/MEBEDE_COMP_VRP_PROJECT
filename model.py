@@ -87,20 +87,41 @@ class Route:
 
 
 class Solution:
-    def __init__(self, id, routes):
+    def __init__(self, id, routes, rcl_size=None, seed=None):
         self.id = id
         self.routes = routes
         self.obj = 0 if len(routes) == 0 else max(routes, key=lambda x: x.time).time
+        self.rcl_size = rcl_size
+        self.seed = seed
 
     def print(self):
         for r in self.routes:
             print(r.id, ":", [n.id for n in r.nodes[:-1]], r.time, r.demand)
-        print("obj:", self.obj)
+        obj = max(self.routes, key=lambda x: x.time)
+        print("rcl_size: " + str(self.rcl_size) + " ,seed: " + str(self.seed))
+        print("obj=", obj.time)
 
-    def draw_results(self):
+    def printed_form(self):
+        printed_sol = ""
+        for r in self.routes:
+            printed_nodes = str(r.nodes[0].id)
+            for n in r.nodes[1:-1]:
+                printed_nodes += "," + str(n.id)
+            printed_sol += str(r.id) + ": " + printed_nodes + "   " + str(r.time) + " " + str(r.demand) + "\n"
+        printed_sol += "Rcl_size: " + str(self.rcl_size) + " ,seed: " + str(self.seed) + "\n"
+        printed_sol += "obj: " + str(self.obj) + "\n\n"
+        return printed_sol
+
+    def draw_results(self, name):
         for r in self.routes:
             x_points = [n.x for n in r.nodes[:-1]]
             y_points = [n.y for n in r.nodes[:-1]]
             plt.plot(x_points, y_points, linestyle='dashed', marker='o', markerfacecolor='black', markersize=5)
-        plt.savefig(str(self.id) + ".png")
+        # plt.savefig(str(self.id) + ".png")
+        plt.savefig(name + ".png")
         plt.close()
+
+    def store_results(self, filename):
+        with open(filename, "a") as f:
+            f.write(self.printed_form())
+        f.close()
