@@ -28,11 +28,14 @@ def calculate_obj(sol):
 m = Model()
 m.BuildModel()
 #print_nodes(m)
-#print_matrix(m)
+# print_matrix(m)
 
 s = Solver(m)
 sol = s.solve()
-print(len(sol.routes))
+# print(len(sol.routes))
+for c in s.customers:
+    if c.isRouted == False:
+        print('KINDA SOMETHING WENT WRONG!')
 write_output_file(sol)
 
 
