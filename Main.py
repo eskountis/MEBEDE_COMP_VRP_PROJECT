@@ -35,7 +35,7 @@ sol = s.solve()
 # print(len(sol.routes))
 for c in s.customers:
     if c.isRouted == False:
-        print('KINDA SOMETHING WENT WRONG!')
+        print('KINDA SOMETHING WENT WRONG!- ', c.ID, 'is not routed' )
 write_output_file(sol)
 
 

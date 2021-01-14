@@ -26,7 +26,7 @@ class RelocationMove(object):
         self.targetNodePosition = None
         self.costChangeOriginRt = None
         self.costChangeTargetRt = None
-        self.moveCost = 10 ** 9
+        self.moveCost = 0
 
 
 class SwapMove(object):
@@ -46,7 +46,7 @@ class SwapMove(object):
         self.positionOfSecondNode = None
         self.costChangeFirstRt = None
         self.costChangeSecondRt = None
-        self.moveCost = 10 ** 9
+        self.moveCost = 0
 
 
 class CustomerInsertion(object):
@@ -77,7 +77,7 @@ class TwoOptMove(object):
         self.positionOfSecondRoute = None
         self.positionOfFirstNode = None
         self.positionOfSecondNode = None
-        self.moveCost = 10 ** 9
+        self.moveCost = 0
 
 
 class Solver:
@@ -97,26 +97,47 @@ class Solver:
     def max_route_cost(self, sol):
         rsortedlist = sorted(sol.routes, key=lambda r: r.cost, reverse=True)
         return rsortedlist[0].cost
+    def max_route(self, sol):
+        rsortedlist = sorted(sol.routes, key=lambda r: r.cost, reverse=True)
+        return rsortedlist[0]
 
     def solve(self):
-        for i in range(10):
+        for i in range(5, 25):
             self.SetRoutedFlagToFalseForAllCustomers()
             self.NewApplyNearestNeighborMethod(i)
-            # self.BestFitReversed(i)
+            #self.BestFitReversed(i)
+            self.tsp()
             cc = self.sol.cost
             print(i, 'Constr:', self.sol.cost, self.max_route_cost(self.sol))
             # self.MinimumInsertions(i)
             # self.ReportSolution(self.sol)
-            #self.LocalSearch(1)  # 0 relocations, 1 swap , 2 twoopt
+            # self.LocalSearch(2)  # 0 relocations, 1 swap, 2 twoopt
+            # print('TWO OPT DONE! ')
+            # self.LocalSearch(1)  # 0 relocations, 1 swap, 2 twoopt
+            # print('RELO DONE! ')
+            # self.LocalSearch(0)
 
             while True:
-                self.LocalSearch(1)
-                print('LS(swap) on BestOverall: ', self.sol.cost, self.max_route_cost(self.sol))
-                a = self.max_route_cost(self.sol)
+
                 self.LocalSearch(2)
-                print('LS(2-opt) on BestOverall: ', self.sol.cost, self.max_route_cost(self.sol))
+                print('-LS(two opt) on BestOverall: ', self.sol.cost, self.max_route_cost(self.sol))
+                c = self.max_route_cost(self.sol)
+                # if a != b:
+                #     continue
+
+                self.LocalSearch(1)
+                print('-LS(swap) on BestOverall: ', self.sol.cost, self.max_route_cost(self.sol))
                 b = self.max_route_cost(self.sol)
-                if a == b:
+                if c != b:
+                    continue
+
+                self.LocalSearch(0)
+                print('-LS(relo) on BestOverall: ', self.sol.cost, self.max_route_cost(self.sol))
+                a= self.max_route_cost(self.sol)
+                if a != b:
+                    continue
+
+                if a == b and c == a:
                     break
 
             if self.overallBestSol == None or self.max_route_cost(self.overallBestSol) > self.max_route_cost(self.sol):
@@ -127,6 +148,7 @@ class Solver:
                   self.overallBestSol.cost, self.max_route_cost(self.overallBestSol))
             # SolDrawer.draw(i, self.sol, self.allNodes)
         self.sol = self.overallBestSol
+
         # while True:
         #     self.LocalSearch(2)
         #     print('LS(2-opt) on BestOverall: ', self.sol.cost, self.max_route_cost(self.sol))
@@ -136,6 +158,7 @@ class Solver:
         #     b = self.max_route_cost(self.sol)
         #     if a == b:
         #         break
+
         # self.ReportSolution(self.sol)
         SolDrawer.draw(10000, self.sol, self.allNodes)
         # optimal
@@ -145,6 +168,41 @@ class Solver:
     def SetRoutedFlagToFalseForAllCustomers(self):
         for i in range(0, len(self.customers)):
             self.customers[i].isRouted = False
+
+    def tsp(self):
+        cloneSol = self.cloneSolution(self.sol)
+        cloneSol.cost = 0
+        # self.sol.cost = 0
+        # self.SetRoutedFlagToFalseForAllCustomers()
+        for rt in cloneSol.routes:
+            custs = rt.sequenceOfNodes[1:-1]
+            del rt.sequenceOfNodes[1:]
+
+            for cust in custs:
+                cust.isRouted = False
+
+            for i in range(0, len(custs)):
+                min_cost = 10 ** 10
+                insert_cust = None
+                for cust in custs:
+                    if cust.isRouted == True:
+                        continue
+                    trialCost = self.distanceMatrix[rt.sequenceOfNodes[-1].ID][cust.ID]
+                    if trialCost < min_cost:
+                        insert_cust = cust
+                        min_cost = trialCost
+
+                cloneSol.cost += self.distanceMatrix[rt.sequenceOfNodes[-1].ID][insert_cust.ID]
+                rt.sequenceOfNodes.append(insert_cust)
+                insert_cust.isRouted = True
+            rt.sequenceOfNodes.append(rt.sequenceOfNodes[0])
+            cloneSol.cost += self.distanceMatrix[rt.sequenceOfNodes[-2].ID][rt.sequenceOfNodes[-1].ID]
+            self.UpdateRouteCostAndLoad(rt)
+        #Mhpws if maxroutecost clonesol < maxroutecost self.sol then: (?)
+        #if self.max_route_cost(cloneSol) < self.max_route_cost(self.sol):
+        self.sol = cloneSol
+
+
 
     def BestFitReversed(self, itr=0):
         self.sol = Solution()
@@ -157,8 +215,8 @@ class Solver:
                 if len(self.sol.routes) >= 25:  # I got 25 vehicles.
                     route_builder = False
                     for r in self.sol.routes:
-                        if r.cost == self.max_route_cost(self.sol):
-                            continue
+                        # if r.cost == self.max_route_cost(self.sol):
+                        #     continue
                         if r.load + cust.demand <= r.capacity:
                             trialcost = self.distanceMatrix[r.sequenceOfNodes[-2].ID][cust.ID]
                             if len(rcl) < self.rcl_size:
@@ -302,39 +360,51 @@ class Solver:
 
         while terminationCondition is False:
             self.InitializeOperators(rm, sm, top)
-            # if operator == 1:
+            # if operator == 0:
             #     SolDrawer.draw(localSearchIterator, self.sol, self.allNodes)
 
             # Relocations
             if operator == 0:
                 self.FindBestRelocationMove(rm)
                 if rm.originRoutePosition is not None:
-                    if rm.moveCost < 0:
-                        self.ApplyRelocationMove(rm)
-                    else:
-                        terminationCondition = True
+                    # if rm.moveCost < 0:
+                    self.ApplyRelocationMove(rm)
+                    # print('total cost: ', self.sol.cost)
+                    # print("obj: ", self.max_route_cost(self.sol))
+                else:
+                    terminationCondition = True
             # Swaps
             elif operator == 1:
                 self.FindBestSwapMove(sm)
                 if sm.positionOfFirstRoute is not None:
-                    if sm.moveCost < 0:
-                        self.ApplySwapMove(sm)
-                    else:
-                        terminationCondition = True
+                    #if sm.moveCost < 0:
+                    self.ApplySwapMove(sm)
+                    # print('total cost: ', self.sol.cost)
+                    # print("obj: ", self.max_route_cost(self.sol))
+                else:
+                    terminationCondition = True
             elif operator == 2:
                 self.FindBestTwoOptMove(top)
                 if top.positionOfFirstRoute is not None:
-                    if top.moveCost < 0:
-                        self.ApplyTwoOptMove(top)
-                    else:
-                        terminationCondition = True
+                    #if top.moveCost < 0:
+                    self.ApplyTwoOptMove(top)
+                    # print('total cost: ', self.sol.cost)
+                    # print("obj: ", self.max_route_cost(self.sol))
+                else:
+                    terminationCondition = True
 
             self.TestSolution()
+
 
             if (self.max_route_cost(self.sol) < self.max_route_cost(self.bestSolution)):
             # if (self.sol.cost < self.bestSolution.cost):
                 self.bestSolution = self.cloneSolution(self.sol)
             localSearchIterator = localSearchIterator + 1
+
+            # Print every 10 moves the tc, obj
+            if divmod(localSearchIterator, 10)[1] == 0:
+                print('total cost: ', self.sol.cost)
+                print("obj: ", self.max_route_cost(self.sol))
             # if localSearchIterator >= 60:
             #     print('Loop Observed')
             #     break
@@ -358,6 +428,7 @@ class Solver:
         return cloned
 
     def FindBestRelocationMove(self, rm):
+        maxobj_dif = 0
         for originRouteIndex in range(0, len(self.sol.routes)):
             rt1: Route = self.sol.routes[originRouteIndex]
             for targetRouteIndex in range(0, len(self.sol.routes)):
@@ -392,12 +463,28 @@ class Solver:
 
                         moveCost = costAdded - costRemoved
 
-                        if (moveCost < rm.moveCost and abs(moveCost) > 0.0001):
+
+
+                        rmtesting = RelocationMove()
+                        rmtesting.Initialize()
+                        self.StoreBestRelocationMove(originRouteIndex, targetRouteIndex, originNodeIndex,
+                                                     targetNodeIndex, moveCost, originRtCostChange,
+                                                     targetRtCostChange, rmtesting)
+
+                        obj_dif = round(self.max_route_cost(self.sol) - self.max_route_cost(self.clonedSol_appliedmoveRel(rmtesting)), 2)
+
+                        if obj_dif > maxobj_dif or (abs(obj_dif - maxobj_dif) <= 0.00000000000001 and moveCost < rm.moveCost and moveCost < -0.01):
+
                             self.StoreBestRelocationMove(originRouteIndex, targetRouteIndex, originNodeIndex,
                                                          targetNodeIndex, moveCost, originRtCostChange,
                                                          targetRtCostChange, rm)
+                            maxobj_dif = obj_dif
+
+
+
 
     def FindBestSwapMove(self, sm):
+        maxobj_dif = 0
         for firstRouteIndex in range(0, len(self.sol.routes)):
             rt1: Route = self.sol.routes[firstRouteIndex]
             for secondRouteIndex in range(firstRouteIndex, len(self.sol.routes)):
@@ -449,9 +536,49 @@ class Solver:
                             costChangeSecondRoute = costAdded2 - costRemoved2
 
                             moveCost = costAdded1 + costAdded2 - (costRemoved1 + costRemoved2)
-                        if moveCost < sm.moveCost and abs(moveCost) > 0.0001:
-                            self.StoreBestSwapMove(firstRouteIndex, secondRouteIndex, firstNodeIndex, secondNodeIndex,
-                                                   moveCost, costChangeFirstRoute, costChangeSecondRoute, sm)
+
+                        smtesting = SwapMove()
+                        self.StoreBestSwapMove(firstRouteIndex, secondRouteIndex, firstNodeIndex, secondNodeIndex,
+                                               moveCost, costChangeFirstRoute, costChangeSecondRoute, smtesting)
+                        obj_dif = round(self.max_route_cost(self.sol) - self.max_route_cost(self.clonedSol_appliedsm(smtesting)), 2)
+                        #if moveCost < sm.moveCost and abs(moveCost) > 0.0001:
+                        if obj_dif > maxobj_dif or (abs(obj_dif - maxobj_dif) <= 0.00000000000001 and moveCost < sm.moveCost and moveCost < -0.01):
+                            self.StoreBestSwapMove(firstRouteIndex, secondRouteIndex, firstNodeIndex, secondNodeIndex, moveCost, costChangeFirstRoute, costChangeSecondRoute, sm)
+                            maxobj_dif = obj_dif
+
+    def clonedSol_appliedmoveRel(self, rm: RelocationMove):
+        cloneSol = self.cloneSolution(self.sol)
+
+        oldCost = self.CalculateTotalCost(cloneSol)
+
+        originRt = cloneSol.routes[rm.originRoutePosition]
+        targetRt = cloneSol.routes[rm.targetRoutePosition]
+
+        B = originRt.sequenceOfNodes[rm.originNodePosition]
+
+        if originRt == targetRt:
+            del originRt.sequenceOfNodes[rm.originNodePosition]
+            if (rm.originNodePosition < rm.targetNodePosition):
+                targetRt.sequenceOfNodes.insert(rm.targetNodePosition, B)
+            else:
+                targetRt.sequenceOfNodes.insert(rm.targetNodePosition + 1, B)
+
+            originRt.cost += rm.moveCost
+        else:
+            del originRt.sequenceOfNodes[rm.originNodePosition]
+            targetRt.sequenceOfNodes.insert(rm.targetNodePosition + 1, B)
+            originRt.cost += rm.costChangeOriginRt
+            targetRt.cost += rm.costChangeTargetRt
+            originRt.load -= B.demand
+            targetRt.load += B.demand
+
+        cloneSol.cost += rm.moveCost
+
+        newCost = self.CalculateTotalCost(cloneSol)
+        # debuggingOnly
+        if abs((newCost - oldCost) - rm.moveCost) > 0.0001:
+            print('Cost Issue')
+        return cloneSol
 
     def ApplyRelocationMove(self, rm: RelocationMove):
 
@@ -484,6 +611,33 @@ class Solver:
         # debuggingOnly
         if abs((newCost - oldCost) - rm.moveCost) > 0.0001:
             print('Cost Issue')
+
+
+    def clonedSol_appliedsm(self, sm):
+        cloneSol = self.cloneSolution(self.sol)
+        oldCost = self.CalculateTotalCost(self.sol)
+        rt1 = cloneSol.routes[sm.positionOfFirstRoute]
+        rt2 = cloneSol.routes[sm.positionOfSecondRoute]
+        b1 = rt1.sequenceOfNodes[sm.positionOfFirstNode]
+        b2 = rt2.sequenceOfNodes[sm.positionOfSecondNode]
+        rt1.sequenceOfNodes[sm.positionOfFirstNode] = b2
+        rt2.sequenceOfNodes[sm.positionOfSecondNode] = b1
+
+        if (rt1 == rt2):
+            rt1.cost += sm.moveCost
+        else:
+            rt1.cost += sm.costChangeFirstRt
+            rt2.cost += sm.costChangeSecondRt
+            rt1.load = rt1.load - b1.demand + b2.demand
+            rt2.load = rt2.load + b1.demand - b2.demand
+
+        cloneSol.cost += sm.moveCost
+
+        newCost = self.CalculateTotalCost(cloneSol)
+        # debuggingOnly
+        if abs((newCost - oldCost) - sm.moveCost) > 0.0001:
+            print('Cost Issue')
+        return cloneSol
 
     def ApplySwapMove(self, sm):
         oldCost = self.CalculateTotalCost(self.sol)
@@ -606,6 +760,7 @@ class Solver:
         top.Initialize()
 
     def FindBestTwoOptMove(self, top):
+        maxobj_dif = 0
         for rtInd1 in range(0, len(self.sol.routes)):
             rt1: Route = self.sol.routes[rtInd1]
             for rtInd2 in range(rtInd1, len(self.sol.routes)):
@@ -627,7 +782,6 @@ class Solver:
                             if nodeInd1 == 0 and nodeInd2 == len(rt1.sequenceOfNodes) - 2:
                                 continue
                             costAdded = self.distanceMatrix[A.ID][K.ID] + self.distanceMatrix[B.ID][L.ID]
-                            #EDWWWWWW
                             for n in range(nodeInd1 + 1, nodeInd2):
                                 a = rt1.sequenceOfNodes[n]
                                 b = rt1.sequenceOfNodes[n + 1]
@@ -650,9 +804,17 @@ class Solver:
                             costAdded = self.distanceMatrix[A.ID][L.ID] + self.distanceMatrix[K.ID][B.ID]
                             costRemoved = self.distanceMatrix[A.ID][B.ID] + self.distanceMatrix[K.ID][L.ID]
                             moveCost = costAdded - costRemoved
-                        if moveCost < top.moveCost and abs(moveCost) > 0.0001:
+
+
+                        toptesting = TwoOptMove()
+                        self.StoreBestTwoOptMove(rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, toptesting)
+                        obj_dif = round(self.max_route_cost(self.sol) - self.max_route_cost(self.clonedSol_appliedtop(toptesting)), 2)
+                        #if moveCost < top.moveCost and abs(moveCost) > 0.0001:
+
+                        if obj_dif > maxobj_dif or (abs(obj_dif - maxobj_dif) <= 0.00000000000001 and moveCost < top.moveCost and moveCost < -0.01):
                             self.StoreBestTwoOptMove(rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, top)
                             # tabu_list.append(sol.routes[rtInd1].sequenceOfNodes[nodeInd1].ID,moveCost)
+                            maxobj_dif = obj_dif
 
     def CapacityIsViolated(self, rt1, nodeInd1, rt2, nodeInd2):
 
@@ -681,6 +843,44 @@ class Solver:
         top.positionOfFirstNode = nodeInd1
         top.positionOfSecondNode = nodeInd2
         top.moveCost = moveCost
+
+
+    def clonedSol_appliedtop(self, top):
+        cloneSol = self.cloneSolution(self.sol)
+        rt1: Route = cloneSol.routes[top.positionOfFirstRoute]
+        rt2: Route = cloneSol.routes[top.positionOfSecondRoute]
+
+        if rt1 == rt2:
+            # reverses the nodes in the segment [positionOfFirstNode + 1,  top.positionOfSecondNode]
+            reversedSegment = reversed(rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1])
+            # lst = list(reversedSegment)
+            # lst2 = list(reversedSegment)
+            rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1] = reversedSegment
+            ##rt1.sequenceOfNodes[top.positionOfFirstNode + 1], rt1.sequenceOfNodes[top.positionOfSecondNode] = rt1.sequenceOfNodes[top.positionOfSecondNode], rt1.sequenceOfNodes[top.positionOfFirstNode + 1]
+
+            # reversedSegmentList = list(reversed(rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1]))
+            # rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1] = reversedSegmentList
+
+            rt1.cost += top.moveCost
+
+        else:
+            # slice with the nodes from position top.positionOfFirstNode + 1 onwards
+            relocatedSegmentOfRt1 = rt1.sequenceOfNodes[top.positionOfFirstNode + 1:]
+
+            # slice with the nodes from position top.positionOfFirstNode + 1 onwards
+            relocatedSegmentOfRt2 = rt2.sequenceOfNodes[top.positionOfSecondNode + 1:]
+
+            del rt1.sequenceOfNodes[top.positionOfFirstNode + 1:]
+            del rt2.sequenceOfNodes[top.positionOfSecondNode + 1:]
+
+            rt1.sequenceOfNodes.extend(relocatedSegmentOfRt2)
+            rt2.sequenceOfNodes.extend(relocatedSegmentOfRt1)
+
+            self.UpdateRouteCostAndLoad(rt1)
+            self.UpdateRouteCostAndLoad(rt2)
+
+        cloneSol.cost += top.moveCost
+        return cloneSol
 
     def ApplyTwoOptMove(self, top):
         rt1: Route = self.sol.routes[top.positionOfFirstRoute]

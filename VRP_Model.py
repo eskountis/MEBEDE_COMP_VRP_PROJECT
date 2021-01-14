@@ -42,7 +42,7 @@ class Model:
                         time += 15/60
                     elif b.type == 3:
                         time += 25/60
-                self.matrix[i][j] = round(time, 1) #operator 1 needs round , 0,2 needs round ,1(remove prints), operator 0 needs round ,0
+                self.matrix[i][j] = round(time, 2)
 
 
 
