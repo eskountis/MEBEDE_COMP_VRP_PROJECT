@@ -2,41 +2,9 @@ import math
 import random
 import time
 
-import numpy as np
-
-from Competitional import Analytics, Solver, Implementation, VRP_Model
+from Competitional import Implementation
 from Competitional.Model import Route, Solution, Chain
 from Competitional.Solver import TwoOptMove
-
-
-def test_validity_of_solution(sol, time_matrix):
-    routes, obj = sol.routes, sol.obj
-    eps = 0.01
-    costs = []
-    for r in routes:
-        cost = r.calc_route_cost(time_matrix)
-        # print(cost, r.time)
-        if abs(cost - r.time) > eps:
-            return False
-        costs.append(cost)
-    true_obj = max(costs)
-    # print(true_obj, obj)
-    if abs(true_obj - obj) < eps:
-        return True
-    else:
-        return False
-
-
-def exclude_outliers(sol):
-    sol.update_median_and_st_dev()
-    normal_values = []
-    for r in sol.routes:
-        if sol.median - 10 * sol.st_dev < r.time:
-            normal_values.append(r)
-        else:
-            # instead of a route with small cost, insert an empty route object so that this route isn't checked
-            normal_values.append(Route(0, [], 0, 0))
-    return normal_values
 
 
 def calc_cost_difference_for_rel(curr_route, i, k, curr_chain, new_route, j, time_matrix):
@@ -346,38 +314,6 @@ def create_shaking_effect(sol, m):
             closest_route.nodes.insert(-1, node)
 
         ids_to_avoid = [replacing_route.id]
-        # while True:
-        #     routes_valid = True
-        #     for r in sol.routes:  # check if there is any overloaded route
-        #         if r.id == crucial_route.id:
-        #             continue
-        #         if r.demand > m.capacity:  # remove the first node of the overloaded route, which will be the one closer to depot
-        #             routes_valid = False
-        #             if replacing_route.demand + r.nodes[1].demand <= m.capacity:  # put the first node into the new route
-        #                 removed_node = r.nodes[1]
-        #                 r.demand -= removed_node.demand
-        #                 r.time += m.time_matrix[0][r.nodes[2].id] - m.time_matrix[0][removed_node.id] - m.time_matrix[removed_node.id][r.nodes[2].id]
-        #                 r.nodes.remove(removed_node)
-        #                 replacing_route.demand += removed_node.demand
-        #                 replacing_route.time += m.time_matrix[replacing_route.nodes[-1].id][removed_node.id]
-        #                 replacing_route.nodes.append(removed_node)
-        #             else:  # put the last node into the closest available route
-        #                 removed_node = r.nodes[-2]
-        #                 ids_to_avoid = [crucial_route.id]
-        #                 for route in sol.routes:
-        #                     if route.demand + removed_node.demand > m.capacity:
-        #                         ids_to_avoid.append(route.id)
-        #                 closest_route = find_closest_route_to_node(removed_node, sol.routes, m, ids_to_avoid)
-        #
-        #                 r.demand -= removed_node.demand
-        #                 r.time -= m.time_matrix[r.nodes[-3].id][removed_node.id]
-        #                 r.nodes.remove(removed_node)
-        #                 closest_route.demand += removed_node.demand
-        #                 closest_route.time += m.time_matrix[closest_route.nodes[-2].id][removed_node.id]
-        #                 closest_route.nodes.insert(-1, removed_node)
-        #
-        #     if routes_valid:
-        #         break
 
         replacing_route.nodes.append(m.allNodes[0])
         sol.routes.remove(crucial_route)
@@ -385,92 +321,9 @@ def create_shaking_effect(sol, m):
         sol.obj = max(sol.routes, key=lambda x: x.time).time
 
 
-def find_random_move(sol, m, switch):
-    len_accepted = False
-    while not len_accepted:
-        route1_pos = random.randint(0, len(sol.routes) - 1)
-        if len(sol.routes[route1_pos].nodes) > 2:
-            len_accepted = True
-    route1 = sol.routes[route1_pos]
-    node_pos = random.randint(1, len(route1.nodes) - 2)
-    node = route1.nodes[node_pos]
-    aspirant_moves = []
-    if switch == "rel":
-        for route2 in sol.routes:
-            for j in range(1, len(route2.nodes)):
-                if route1.id == route2.id and j in range(node_pos, node_pos + 2):
-                    continue
-
-                if route1.id != route2.id:  # check capacity constraints for different routes
-                    if route2.demand + node.demand > m.capacity:
-                        continue
-
-                new_pred = route2.nodes[j - 1]
-                new_succ = route2.nodes[j]
-
-                # check if the all the nodes at the relocation move examined are out of scope
-                in_scope = True
-                if m.dist_matrix[node.id][new_pred.id] > node.scope_radius and m.dist_matrix[node.id][new_succ.id] > node.scope_radius:
-                    in_scope = False
-                if in_scope:
-                    least_cost_chain1 = [route1.id, node_pos, Chain([node], 0, node.demand, node, node)]
-                    least_cost_chain2 = [route2.id, j, Chain([], 0, 0, None, None)]
-                    aspirant_move = [least_cost_chain1, least_cost_chain2]
-                    aspirant_moves.append(aspirant_move)
-
-    elif switch == "swap":
-        for route2 in sol.routes:
-            for j in range(1, len(route2.nodes) - 1):
-                if route1.id == route2.id and j == node_pos:
-                    continue
-
-                new_node = route2.nodes[j]
-
-                if route1.id != route2.id:  # check capacity constraints for different routes
-                    dem_difference = node.demand - new_node.demand
-                    if dem_difference > 0 and route2.demand + dem_difference > m.capacity:
-                        continue
-                    elif dem_difference < 0 and route1.demand + abs(dem_difference) > m.capacity:
-                        continue
-
-                # check if the all the nodes at the swap move examined are out of scope
-                in_scope = False
-                if m.dist_matrix[node.id][new_node.id] <= node.scope_radius:
-                    in_scope = True
-                if in_scope:
-                    least_cost_chain1 = [route1.id, node_pos, Chain([node], 0, node.demand, node, node)]
-                    least_cost_chain2 = [route2.id, j, Chain([new_node], 0, new_node.demand, new_node, new_node)]
-                    aspirant_move = [least_cost_chain1, least_cost_chain2]
-                    if route1.id > route2.id or (route1.id == route2.id and node_pos > j):
-                        aspirant_move = [least_cost_chain2, least_cost_chain1]
-                    aspirant_moves.append(aspirant_move)
-
-    selected_move = random.choice(aspirant_moves)
-    least_cost_chain1, least_cost_chain2 = selected_move[0], selected_move[1]
-    route1, route2 = sol.routes[least_cost_chain1[0]], sol.routes[least_cost_chain2[0]]
-    node_pos, target_pos = least_cost_chain1[1], least_cost_chain2[1]
-    node_chain = least_cost_chain1[2]
-    if switch == "rel":
-        route1_cost_difference, route2_cost_difference = calc_cost_difference_for_rel(route1, node_pos, 1, node_chain, route2, target_pos, m.time_matrix)
-    elif switch == "swap":
-        target_chain = least_cost_chain2[2]
-        route1_cost_difference, route2_cost_difference = calc_cost_difference_for_swaps(route1, node_pos, 1, node_chain, route2, target_pos, target_chain, m.time_matrix)
-    least_cost_chain1.insert(2, route1_cost_difference)
-    least_cost_chain2.insert(2, route2_cost_difference)
-    obj_difference = calc_obj_difference(sol.routes, least_cost_chain1, least_cost_chain2)
-    selected_move.append(obj_difference)
-    if switch == "rel":
-        new_sol, move = apply_relocation_move(1, sol, selected_move, 1)
-    elif switch == "swap":
-        new_sol, move = apply_k_n_swaps_move(1, sol, selected_move, 1, 1)
-
-    return new_sol, move
-
-
 def random_move(sol, m):
     shaked_sol = Solution(0, [Route(r.id, [node for node in r.nodes], r.time, r.demand) for r in sol.routes])
     crucial_time = shaked_sol.obj
-    crucial_routes = [r.id for r in shaked_sol.routes if abs(r.time - crucial_time) < 0.001]
     moves = []
     top = TwoOptMove()  # initialize two opt move
     solve = Implementation.prepare_for_2_opt(shaked_sol, m)
@@ -479,68 +332,25 @@ def random_move(sol, m):
     move = [top.positionOfFirstRoute, top.positionOfSecondRoute, top.positionOfFirstNode, top.positionOfSecondNode]
     shaked_sol = Implementation.convert_solution(1, solve.bestSolution)
     moves.append(move)
+
     return shaked_sol, moves
 
 
-def apply_2opt(sol, m):
-    new_sol = Solution(0, [Route(r.id, [node for node in r.nodes], r.time, r.demand) for r in sol.routes])
-    i = 0
-    limit = 6
-    while i < limit:
-        top = TwoOptMove()  # initialize two opt move
-        solve = Implementation.prepare_for_2_opt(new_sol, m)
-        solve.FindBestTwoOptMove(top, [])
-        solve.ApplyTwoOptMove(top)
-        move = [top.positionOfFirstRoute, top.positionOfSecondRoute, top.positionOfFirstNode, top.positionOfSecondNode]
-        # if solve.bestSolution.cost < new_sol.obj and i + 1 == limit:
-        #     i -= 1
-        new_sol = Implementation.convert_solution(1, solve.bestSolution)
-        print(solve.bestSolution.cost)
-        i += 1
-    print("------------------")
-
-    return new_sol, move
-
-
-def exclude_obj_outliers(new_stuck_sols):
-    obj_median = round(sum([sol.obj for sol in new_stuck_sols]) / len(new_stuck_sols), 2)
-    obj_var = 0
-    for sol in new_stuck_sols:
-        obj_var += (sol.obj - obj_median) ** 2
-    obj_var /= len(new_stuck_sols) - 1
-    obj_st_dev = math.sqrt(obj_var)
-    normal_sols = []
-    for sol in new_stuck_sols:
-        if sol.obj <= max(obj_median + 1 * obj_st_dev, 4.4):
-            normal_sols.append(sol)
-
-    return normal_sols
-
-
-def tabu_search(sol, m, iterations, rcl_size, seed, k, n, tabu_list_size, prob_for_rel):
-    # if switch == "2opt":
-    top = TwoOptMove()  # initialize two opt move
-    solve = Implementation.prepare_for_2_opt(sol, m)
-    track_of_sols = [sol.obj]
+def tabu_search(sol, m, rcl_size, seed, tabu_list_size, prob_for_rel):
     tabu_list = []  # list containing all the prohibited moves for a specific number of iterations
-    mutation_probability = 1  # probability that a new solution created is assigned to curr_sol for the next iteration
     random.seed(seed)
     i = 1
     iterations_unchanged = 0  # count the times the objective is stuck and doesn't change
     times_stuck = 0  # count the times the unstuck of the objective didn't have any effect
-    new_stuck_sols = []
     curr_sol = Solution(i, [Route(r.id, [node for node in r.nodes], r.time, r.demand) for r in sol.routes])
     total_best = curr_sol  # store the best objective encountered so far in tabu search
     termination_condition = False
-    selected_move = 0
-    obj_improved = False
     st = time.time()
-    while not termination_condition and i < iterations:
-        # if not obj_improved:  # keep going with the same operator if it improved the objective at the previous iteration
+    while not termination_condition:
         r = random.random()
         if r < prob_for_rel:  # apply relocation operator
             print("Rel")
-            selected_move = relocation_move(curr_sol, m.time_matrix, m.dist_matrix, m.capacity, rcl_size, k, tabu_list, iterations_unchanged)  # find best move
+            selected_move = relocation_move(curr_sol, m.time_matrix, m.dist_matrix, m.capacity, rcl_size, 1, tabu_list, iterations_unchanged)  # find best move
         elif r < 0.9:  # apply two-opt operator
             print("2opt")
             top = TwoOptMove()  # initialize two opt move
@@ -550,25 +360,25 @@ def tabu_search(sol, m, iterations, rcl_size, seed, k, n, tabu_list_size, prob_f
                 selected_move = None
         else:  # apply k-n swaps operator
             print("Swap")
-            selected_move = k_n_swap_move(curr_sol, m.time_matrix, m.dist_matrix, m.capacity, rcl_size, k, n, tabu_list, iterations_unchanged)  # find best move
+            selected_move = k_n_swap_move(curr_sol, m.time_matrix, m.dist_matrix, m.capacity, rcl_size, 1, 1, tabu_list, iterations_unchanged)  # find best move
         if selected_move is None:
             termination_condition = True
             continue
 
         if r < prob_for_rel:  # apply relocation move
-            new_sol, move = apply_relocation_move(i + 1, curr_sol, selected_move, k)  # apply the move to create a new dummy solution
+            new_sol, move = apply_relocation_move(i + 1, curr_sol, selected_move, 1)  # apply the move to create a new dummy solution
         elif r < 0.9:  # apply two-opt move
             solve.ApplyTwoOptMove(top)
             move = [top.positionOfFirstRoute, top.positionOfSecondRoute, top.positionOfFirstNode, top.positionOfSecondNode]
             new_sol = Implementation.convert_solution(i + 1, solve.bestSolution)
         else:  # apply k-n swaps
-            new_sol, move = apply_k_n_swaps_move(i + 1, curr_sol, selected_move, k, n)  # apply the move to create a new dummy solution
+            new_sol, move = apply_k_n_swaps_move(i + 1, curr_sol, selected_move, 1, 1)  # apply the move to create a new dummy solution
         new_sol.rcl_size, new_sol.seed = rcl_size, seed
 
         if abs(new_sol.obj - curr_sol.obj) < 0.0001:  # check if the solution's objective hasn't changed
             iterations_unchanged += 1
-            if iterations_unchanged > 25:
-                print("Stuck")
+            if iterations_unchanged >= 25:
+                print("Stuck - Applying random 2-opt")
                 times_stuck += 1
                 if times_stuck >= 4:
                     print("Shaking")
@@ -576,43 +386,29 @@ def tabu_search(sol, m, iterations, rcl_size, seed, k, n, tabu_list_size, prob_f
                     times_stuck = 0
                 else:
                     iterations_unchanged = 0
-                    # new_stuck_sols.append(new_sol)
-                    # new_sol, move = apply_2opt(new_sol, m)
-                    for i in range(1):
-                        new_sol, move = random_move(new_sol, m)
+                    new_sol, move = random_move(new_sol, m)
         else:
             iterations_unchanged = 0
 
         print(new_sol.obj)
-        validity = test_validity_of_solution(new_sol, m.time_matrix)
-        if not validity:
-            print(validity)
-            new_sol.print()
-            break
-        obj_improved = False
         if new_sol.obj <= total_best.obj:  # check if the new solution is better than the current best
             if new_sol.obj < total_best.obj:
                 times_stuck = 0
-                obj_improved = True
             total_best = new_sol
 
         time_running = (time.time() - st) / 60
         if time_running > 5:
-            print(time_running)
-            break
+            print(time_running, "minutes")
+            termination_condition = True
+            continue
 
         curr_sol = new_sol
-        track_of_sols.append(new_sol.obj)
 
         if move is not None:
             tabu_list.append(move)  # update tabu list
         if len(tabu_list) == tabu_list_size:
             tabu_list.pop(random.randint(0, tabu_list_size - 1))  # remove an element of the list when it goes full
 
-        i += 1
-
     total_best.print()
-    validity = test_validity_of_solution(total_best, m.time_matrix)
-    print("Validity:", validity)
     # Analytics.visualize_sol_evolvement(np.arange(len(track_of_sols)), track_of_sols)
     return total_best

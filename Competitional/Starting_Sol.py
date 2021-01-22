@@ -24,10 +24,6 @@ def route_clustering_with_tsp_nearest(radius_from_depot, m):
     enhanced_routes = []  # apply tsp nearest algorithm in each route to create a better initial solution
     for r in routes:
         enhanced_routes.append(tsp_nearest(r, m.time_matrix))
-    # routes = create_extra_route(routes, m)
-    # enhanced_routes = []  # apply tsp nearest algorithm in each route to create a better initial solution
-    # for r in routes:
-    #     enhanced_routes.append(tsp_nearest(r, m.time_matrix))
 
     return Solution(0, enhanced_routes)
 
@@ -240,7 +236,6 @@ def routes_clustering(radius, m):
         node_initial_owner[node.id] = closest_mean
     # Analytics.visualize_k_means_development(1, means, routes)
     untouchable_nodes = []  # the nodes that cause the solution to form infinite loops and shall not be examined again
-    iteration = 2
     while True:
         all_routes_valid = True
         for mean, route in routes.items():

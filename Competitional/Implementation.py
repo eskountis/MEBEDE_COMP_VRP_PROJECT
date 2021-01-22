@@ -2,28 +2,6 @@ from Competitional import Search, VRP_Model
 from Competitional.Model import Route, Solution
 from Competitional import Solver
 
-
-def vnd(initial_sol, m, rcl_size, seed, tabu_size, prob):
-    sol = initial_sol
-
-    stuck_sols = []
-    # # implement swaps operator for 1-1 node chains
-    # sol, stuck_sols = Search.tabu_search(sol, m, iterations_for_swap, rcl_size, seed, 1, 1, "", stuck_sols)
-
-    # implement relocation operator
-    sol = Search.tabu_search(sol, m, 7000, rcl_size, seed, 1, 1, tabu_size, prob)
-
-    # implement 2opt operator
-    # sol, stuck_sols = Search.tabu_search(sol, m, iterations_for_2opt, rcl_size, seed, 1, 0, "2opt", stuck_sols)
-
-    # print("Validity:", Search.test_validity_of_solution(sol, time_matrix))
-    # sol.print()
-    # if abs(sol.obj - initial_sol.obj) > eps:  # apply vnd method
-    #     sol = vnd(sol, time_matrix, m, seed, iterations_for_swap, iterations_for_2opt, iterations_for_rel)
-
-    return sol
-
-
 def prepare_for_2_opt(swap_sol, m):
     solve = Solver.Solver(m)
 
@@ -75,3 +53,19 @@ def test_solution(sol, time_matrix, rt1, rt2):
         return False
 
 
+def test_validity_of_solution(sol, time_matrix):
+    routes, obj = sol.routes, sol.obj
+    eps = 0.01
+    costs = []
+    for r in routes:
+        cost = r.calc_route_cost(time_matrix)
+        # print(cost, r.time)
+        if abs(cost - r.time) > eps:
+            return False
+        costs.append(cost)
+    true_obj = max(costs)
+    # print(true_obj, obj)
+    if abs(true_obj - obj) < eps:
+        return True
+    else:
+        return False
