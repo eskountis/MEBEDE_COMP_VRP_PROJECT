@@ -1,7 +1,6 @@
 import random, math
 from matplotlib import pyplot as plt
 
-from Competitional import Analytics
 from Competitional.Model import Route, Solution
 
 
@@ -190,7 +189,7 @@ def k_means_clustering(m):
     means = m.vehicles
     radius = 20
     means = get_starting_means(means, radius)
-    Analytics.visualize_clustering_construction(means, m.customers)
+    # Analytics.visualize_clustering_construction(means, m.customers)
     node_owner = {node.id: -1 for node in m.customers}  # shows the index of the closest mean to that node
     termination_condition = False
     iteration = 0
@@ -212,7 +211,7 @@ def k_means_clustering(m):
             continue
 
         iteration += 1
-        Analytics.visualize_clustering_development(iteration, means, nodes_in_mean_scope)
+        # Analytics.visualize_clustering_development(iteration, means, nodes_in_mean_scope)
 
         for i in range(len(means)):
             new_mean_x = sum([n.x for n in nodes_in_mean_scope[i]]) / len(nodes_in_mean_scope[i])
@@ -220,7 +219,7 @@ def k_means_clustering(m):
             means[i] = (new_mean_x, new_mean_y)
 
         iteration += 1
-        Analytics.visualize_clustering_development(iteration, means, nodes_in_mean_scope)
+        # Analytics.visualize_clustering_development(iteration, means, nodes_in_mean_scope)
 
 
 def routes_clustering(radius, m):
@@ -271,7 +270,6 @@ def routes_clustering(radius, m):
                 untouchable_nodes.append(most_remote_node.id)
 
             # Analytics.visualize_k_means_development(iteration, means, routes)
-            # iteration += 1
         if all_routes_valid:
             break
 

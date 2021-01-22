@@ -1,6 +1,7 @@
-from Competitional import Search, VRP_Model
+from Competitional import VRP_Model
 from Competitional.Model import Route, Solution
 from Competitional import Solver
+
 
 def prepare_for_2_opt(swap_sol, m):
     solve = Solver.Solver(m)

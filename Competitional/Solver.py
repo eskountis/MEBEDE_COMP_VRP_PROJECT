@@ -1,8 +1,6 @@
-from matplotlib import pyplot
-
 from Competitional.VRP_Model import *
 # from SolutionDrawer import *
-import random, copy
+import random
 
 
 class Solution:
