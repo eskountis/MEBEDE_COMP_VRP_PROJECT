@@ -472,16 +472,12 @@ def random_move(sol, m):
     crucial_time = shaked_sol.obj
     crucial_routes = [r.id for r in shaked_sol.routes if abs(r.time - crucial_time) < 0.001]
     moves = []
-    r = random.random()
-    if r < 0.5:
-        shaked_sol, move = find_random_move(shaked_sol, m, "rel")
-    else:
-        top = TwoOptMove()  # initialize two opt move
-        solve = Implementation.prepare_for_2_opt(shaked_sol, m)
-        solve.find_random_two_opt_move(top)
-        solve.ApplyTwoOptMove(top)
-        move = [top.positionOfFirstRoute, top.positionOfSecondRoute, top.positionOfFirstNode, top.positionOfSecondNode]
-        shaked_sol = Implementation.convert_solution(1, solve.bestSolution)
+    top = TwoOptMove()  # initialize two opt move
+    solve = Implementation.prepare_for_2_opt(shaked_sol, m)
+    solve.find_random_two_opt_move(top)
+    solve.ApplyTwoOptMove(top)
+    move = [top.positionOfFirstRoute, top.positionOfSecondRoute, top.positionOfFirstNode, top.positionOfSecondNode]
+    shaked_sol = Implementation.convert_solution(1, solve.bestSolution)
     moves.append(move)
     return shaked_sol, moves
 
