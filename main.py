@@ -17,8 +17,6 @@ depot = m.allNodes[0]
 # # signature = "_by_demands"
 # signature = "_by_distance"
 radius = 20
-filename = "Award Winning Solutions.txt"
-signature = "_by_clusters"
 
 rcl_sizes = [5, 7, 10]
 tabu_list_sizes = [20, 30]
