@@ -27,8 +27,6 @@ for tabu_size in tabu_list_sizes:
     for rcl_size in rcl_sizes:
         for prob in probs:
             for seed in range(101, 111):
-                if rcl_size == 5 and tabu_size == 20 and prob == 0.55:
-                    continue
                 sol = Starting_Sol.route_clustering_with_tsp_nearest(radius, m)
                 print(sol.obj)
                 # sol.draw_results("before")
