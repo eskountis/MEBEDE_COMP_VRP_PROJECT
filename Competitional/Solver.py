@@ -1,3 +1,5 @@
+from matplotlib import pyplot
+
 from Competitional.VRP_Model import *
 # from SolutionDrawer import *
 import random, copy
@@ -70,6 +72,7 @@ class TwoOptMove(object):
         self.positionOfSecondRoute = None
         self.positionOfFirstNode = None
         self.positionOfSecondNode = None
+        self.objective_difference = 0
         self.moveCost = None
 
     def Initialize(self):
@@ -77,6 +80,7 @@ class TwoOptMove(object):
         self.positionOfSecondRoute = None
         self.positionOfFirstNode = None
         self.positionOfSecondNode = None
+        self.objective_difference = 0
         self.moveCost = 0
 
 
@@ -87,6 +91,7 @@ class Solver:
         self.depot = m.allNodes[0]
         # self.distanceMatrix = m.matrix
         self.distanceMatrix = m.time_matrix  # Mixalis added this
+        self.dist_matrix = m.dist_matrix  # Mixalis added this
         self.capacity = m.capacity
         self.sol = None
         self.bestSolution = None
@@ -749,8 +754,10 @@ class Solver:
         sm.Initialize()
         top.Initialize()
 
-    def FindBestTwoOptMove(self, top, tabu_list):
+    def FindBestTwoOptMove(self, top, tabu_list, rcl_size):
         maxobj_dif = -10 ** 2
+        max_moveCost = 10 ** 2
+        top_moves = []
         for rtInd1 in range(0, len(self.sol.routes)):
             rt1: Route = self.sol.routes[rtInd1]
             for rtInd2 in range(rtInd1, len(self.sol.routes)):
@@ -768,7 +775,52 @@ class Solver:
                         K = rt2.sequenceOfNodes[nodeInd2]
                         L = rt2.sequenceOfNodes[nodeInd2 + 1]
 
-                        if rt1 == rt2:
+                        # check if the two args are intersected, if not continue
+                        a1 = -1
+                        y1_coefficient = 0  # begin with the hypothesis that the straight line is of the form x=b
+                        if A.x != B.x:
+                            a1 = (A.y - B.y) / (A.x - B.x)
+                            y1_coefficient = 1
+                        b1 = y1_coefficient * A.y - a1 * A.x
+                        a2 = -1
+                        y2_coefficient = 0
+                        if K.x != L.x:
+                            a2 = (K.y - L.y) / (K.x - L.x)
+                            y2_coefficient = 1
+                        b2 = y2_coefficient * K.y - a2 * K.x
+
+                        if abs(a1 - a2) < 0.001:  # if the two args are collateral
+                            continue
+
+                        if y1_coefficient == 0:  # if the first straight line is of the form x=b
+                            intersection_x = b1
+                            intersection_y = a2 * intersection_x + b2
+                        elif y2_coefficient == 0:  # if the second straight line is of the form x=b
+                            intersection_x = b2
+                            intersection_y = a1 * intersection_x + b1
+                        else:
+                            intersection_x = (b2 - b1) / (a1 * y1_coefficient - a2 * y2_coefficient)
+                            intersection_y = a1 * intersection_x + b1
+                        lines_intersected = False
+                        if min(A.x, B.x) <= intersection_x <= max(A.x, B.x) and min(A.y, B.y) <= intersection_y <= max(A.y, B.y):
+                            if min(K.x, L.x) <= intersection_x <= max(K.x, L.x) and min(K.y, L.y) <= intersection_y <= max(K.y, L.y):
+                                lines_intersected = True
+                        if not lines_intersected:
+                            # check if the all the nodes at the swap move examined are out of scope
+                            rt1_nodes = [A, B]
+                            rt2_nodes = [K, L]
+                            in_scope = False
+                            for n1 in rt1_nodes:
+                                for n2 in rt2_nodes:
+                                    if self.dist_matrix[n1.id][n2.id] <= n1.scope_radius:
+                                        in_scope = True
+                                        break
+                                if in_scope:
+                                    break
+                            if not in_scope:
+                                continue
+
+                        if rtInd1 == rtInd2:
                             if nodeInd1 == 0 and nodeInd2 == len(rt1.sequenceOfNodes) - 2:
                                 continue
                             costAdded = self.distanceMatrix[A.ID][K.ID] + self.distanceMatrix[B.ID][L.ID]
@@ -781,7 +833,6 @@ class Solver:
                                 a = rt1.sequenceOfNodes[n]
                                 b = rt1.sequenceOfNodes[n + 1]
                                 costRemoved += self.distanceMatrix[a.ID][b.ID]
-                            #costRemoved = self.distanceMatrix[A.ID][B.ID] + self.distanceMatrix[K.ID][L.ID] + self.distanceMatrix[B.ID][K.ID]
                             moveCost = costAdded - costRemoved
                         else:
                             if nodeInd1 == 0 and nodeInd2 == 0:
@@ -796,7 +847,7 @@ class Solver:
                             moveCost = costAdded - costRemoved
 
                         toptesting = TwoOptMove()
-                        self.StoreBestTwoOptMove(rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, toptesting)
+                        self.StoreBestTwoOptMove(rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, 0, toptesting)
                         obj_dif = self.max_route_cost(self.sol) - self.max_route_cost(self.clonedSol_appliedtop(toptesting))
 
                         move = [rtInd1, rtInd2, nodeInd1, nodeInd2]
@@ -805,10 +856,131 @@ class Solver:
                                 continue
 
                         #if moveCost < top.moveCost and abs(moveCost) > 0.0001:
-                        if obj_dif > maxobj_dif or (abs(obj_dif - maxobj_dif) <= 0.0001 and moveCost < top.moveCost and moveCost < - 0.0001):
-                            self.StoreBestTwoOptMove(rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, top)
+                        if obj_dif > maxobj_dif or (0 <= obj_dif - maxobj_dif <= 0.0000000000001 and moveCost < max_moveCost):
                             # tabu_list.append(sol.routes[rtInd1].sequenceOfNodes[nodeInd1].ID,moveCost)
                             maxobj_dif = obj_dif
+                            move = [rtInd1, rtInd2, nodeInd1, nodeInd2]
+
+                            if len(top_moves) < rcl_size:  # fill the list up to the required size
+                                top_moves.append([move, moveCost, obj_dif, top])
+                                if len(top_moves) == rcl_size:  # when list goes full, set the comparison criteria
+                                    worst_obj_difference = min(top_moves, key=lambda x: x[2])[2]
+                                    worst_best_move = max(filter(lambda x: abs(x[2] - worst_obj_difference) < 0.001, top_moves), key=lambda x:x[1])
+                                    max_moveCost = worst_best_move[1]
+                                    maxobj_dif = worst_best_move[2]
+                            else:
+                                top_moves.remove(worst_best_move)
+                                top_moves.append([move, moveCost, obj_dif, top])
+                                worst_obj_difference = min(top_moves, key=lambda x: x[2])[2]
+                                worst_best_move = max(filter(lambda x: abs(x[2] - worst_obj_difference) < 0.001, top_moves), key=lambda x: x[1])
+                                max_moveCost = worst_best_move[1]
+                                maxobj_dif = worst_best_move[2]
+
+        top_move = max(top_moves, key=lambda x: x[2])
+        best_obj_difference = top_move[2]
+        best_move_cost = top_move[1]
+        if best_obj_difference < 0:  # return the best move found if it improves the objective
+            selected_move = top_move
+        else:  # if no move can improve the objective, return randomly oe of the top moves to create shaking effect
+            selected_move = top_moves[random.randint(0, len(top_moves) - 1)]
+        move = selected_move[0]
+        self.StoreBestTwoOptMove(move[0], move[1], move[2], move[3], best_move_cost, best_obj_difference, top)
+
+    def find_random_two_opt_move(self, top):
+        route_len_accepted = False
+        while not route_len_accepted:
+            rtInd1 = random.randint(0, len(self.sol.routes) - 1)
+            rt1 = self.sol.routes[rtInd1]
+            if 1 < len(rt1.sequenceOfNodes) - 2:
+                route_len_accepted = True
+        nodeInd1 = random.randint(1, len(rt1.sequenceOfNodes) - 2)
+        aspirant_moves = []
+        for rtInd2 in range(0, len(self.sol.routes)):
+            rt2 = self.sol.routes[rtInd2]
+            for nodeInd2 in range(1, len(rt2.sequenceOfNodes) - 1):
+                if rt1 == rt2 and nodeInd2 in range(nodeInd1 - 1, nodeInd1 + 2):
+                    continue
+
+
+                A = rt1.sequenceOfNodes[nodeInd1]
+                B = rt1.sequenceOfNodes[nodeInd1 + 1]
+                K = rt2.sequenceOfNodes[nodeInd2]
+                L = rt2.sequenceOfNodes[nodeInd2 + 1]
+
+                if self.CapacityIsViolated(rt1, nodeInd1, rt2, nodeInd2):
+                    continue
+
+                # check if the two args are intersected, if not continue
+                a1 = -1
+                y1_coefficient = 0  # begin with the hypothesis that the straight line is of the form x=b
+                if A.x != B.x:
+                    a1 = (A.y - B.y) / (A.x - B.x)
+                    y1_coefficient = 1
+                b1 = y1_coefficient * A.y - a1 * A.x
+                a2 = -1
+                y2_coefficient = 0
+                if K.x != L.x:
+                    a2 = (K.y - L.y) / (K.x - L.x)
+                    y2_coefficient = 1
+                b2 = y2_coefficient * K.y - a2 * K.x
+
+                if abs(a1 - a2) < 0.001:  # if the two args are collateral
+                    continue
+
+                if y1_coefficient == 0:  # if the first straight line is of the form x=b
+                    intersection_x = b1
+                    intersection_y = a2 * intersection_x + b2
+                elif y2_coefficient == 0:  # if the second straight line is of the form x=b
+                    intersection_x = b2
+                    intersection_y = a1 * intersection_x + b1
+                else:
+                    intersection_x = (b2 - b1) / (a1 * y1_coefficient - a2 * y2_coefficient)
+                    intersection_y = a1 * intersection_x + b1
+
+                lines_intersected = False
+                if min(A.x, B.x) <= intersection_x <= max(A.x, B.x) and min(A.y, B.y) <= intersection_y <= max(A.y, B.y):
+                    if min(K.x, L.x) <= intersection_x <= max(K.x, L.x) and min(K.y, L.y) <= intersection_y <= max(K.y, L.y):
+                        lines_intersected = True
+                if not lines_intersected:
+
+                    # check if the all the nodes at the swap move examined are out of scope
+                    rt1_nodes = [A, B]
+                    rt2_nodes = [K, L]
+                    in_scope = False
+                    for n1 in rt1_nodes:
+                        for n2 in rt2_nodes:
+                            if self.dist_matrix[n1.id][n2.id] <= n1.scope_radius:
+                                in_scope = True
+                                break
+                        if in_scope:
+                            break
+                    if not in_scope:
+                        continue
+
+                # calculate moveCost
+                if rtInd1 == rtInd2:
+                    costAdded = self.distanceMatrix[A.ID][K.ID] + self.distanceMatrix[B.ID][L.ID]
+                    for n in range(nodeInd1 + 1, nodeInd2):
+                        a = rt1.sequenceOfNodes[n]
+                        b = rt1.sequenceOfNodes[n + 1]
+                        costAdded += self.distanceMatrix[b.ID][a.ID]
+                    costRemoved = 0
+                    for n in range(nodeInd1, nodeInd2 + 1):
+                        a = rt1.sequenceOfNodes[n]
+                        b = rt1.sequenceOfNodes[n + 1]
+                        costRemoved += self.distanceMatrix[a.ID][b.ID]
+                    moveCost = costAdded - costRemoved
+                else:
+                    costAdded = self.distanceMatrix[A.ID][L.ID] + self.distanceMatrix[K.ID][B.ID]
+                    costRemoved = self.distanceMatrix[A.ID][B.ID] + self.distanceMatrix[K.ID][L.ID]
+                    moveCost = costAdded - costRemoved
+
+                aspirant_moves.append([rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, top])
+                if rtInd1 > rtInd2 or (rtInd1 == rtInd2 and nodeInd1 > nodeInd2):
+                    aspirant_moves.append([rtInd2, rtInd1, nodeInd2, nodeInd1, moveCost, top])
+
+        selected_move = random.choice(aspirant_moves)
+        self.StoreBestTwoOptMove(selected_move[0], selected_move[1], selected_move[2], selected_move[3], selected_move[4], 0, selected_move[5])
 
     def CapacityIsViolated(self, rt1, nodeInd1, rt2, nodeInd2):
 
@@ -831,11 +1003,12 @@ class Solver:
 
         return False
 
-    def StoreBestTwoOptMove(self, rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, top):
+    def StoreBestTwoOptMove(self, rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, obj_dif, top):
         top.positionOfFirstRoute = rtInd1
         top.positionOfSecondRoute = rtInd2
         top.positionOfFirstNode = nodeInd1
         top.positionOfSecondNode = nodeInd2
+        top.objective_difference = obj_dif
         top.moveCost = moveCost
 
 
@@ -855,7 +1028,7 @@ class Solver:
             # reversedSegmentList = list(reversed(rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1]))
             # rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1] = reversedSegmentList
 
-            rt1.cost += top.moveCost
+            self.UpdateRouteCostAndLoad(rt1)
 
         else:
             # slice with the nodes from position top.positionOfFirstNode + 1 onwards
@@ -891,7 +1064,7 @@ class Solver:
             # reversedSegmentList = list(reversed(rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1]))
             # rt1.sequenceOfNodes[top.positionOfFirstNode + 1: top.positionOfSecondNode + 1] = reversedSegmentList
 
-            rt1.cost += top.moveCost
+            self.UpdateRouteCostAndLoad(rt1)
 
         else:
             # slice with the nodes from position top.positionOfFirstNode + 1 onwards
@@ -909,7 +1082,8 @@ class Solver:
             self.UpdateRouteCostAndLoad(rt1)
             self.UpdateRouteCostAndLoad(rt2)
 
-        self.sol.cost += top.moveCost
+        # self.sol.cost += top.moveCost
+        self.sol.cost -= top.objective_difference
 
     def UpdateRouteCostAndLoad(self, rt: Route):
         tc = 0

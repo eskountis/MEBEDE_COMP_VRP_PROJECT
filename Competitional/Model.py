@@ -13,9 +13,13 @@ class Node:
         self.y = yy
         if self.type == 0:
             self.delivery_time = 0
+        elif self.type == 1:
+            self.delivery_time = 5/60
+        elif self.type == 2:
+            self.delivery_time = 15/60
         else:
-            self.delivery_time = 1/6 * self.type - 1/12  # makes it 1/12 for type 1, 1/4 for type 2 and 5/12 for type 3
-        self.scope_radius = 30
+            self.delivery_time = 25/60
+        self.scope_radius = 40
 
 
 class Model:
@@ -63,12 +67,12 @@ class Model:
         time_matrix = [[0.0 for j in range(0, len(all_nodes))] for k in range(0, len(all_nodes))]
         for i in range(1, len(all_nodes)):
             time = self.dist_matrix[0][i] / self.truck_velocity
-            time_matrix[0][i] = round(time + all_nodes[i].delivery_time, 2)
+            time_matrix[0][i] = time + all_nodes[i].delivery_time
         for i in range(0, len(all_nodes)):
             for j in range(1, i):
                 time = self.dist_matrix[i][j] / self.truck_velocity
-                time_matrix[i][j] = round(time + all_nodes[j].delivery_time, 2)
-                time_matrix[j][i] = round(time + all_nodes[i].delivery_time, 2)
+                time_matrix[i][j] = time + all_nodes[j].delivery_time
+                time_matrix[j][i] = time + all_nodes[i].delivery_time
         self.time_matrix = time_matrix
 
 
@@ -107,8 +111,8 @@ class Solution:
         self.median = sum([r.time for r in self.routes]) / len(self.routes)
         var = 0
         for r in self.routes:
-            var += round((r.time - self.median) ** 2, 2)
-        var /= round(len(self.routes) - 1, 2)
+            var += (r.time - self.median) ** 2
+        var /= len(self.routes) - 1
         self.st_dev = math.sqrt(var)
 
     def print(self):
@@ -138,6 +142,11 @@ class Solution:
         plt.close()
 
     def store_results(self, filename):
-        with open(filename, "a") as f:
-            f.write(self.printed_form())
+        with open(filename, "w") as f:
+            f.write(str(self.obj) + "\n")
+            for r in self.routes:
+                f.write("0")
+                for n in r.nodes[1:-1]:
+                    f.write("," + str(n.id))
+                f.write("\n")
         f.close()

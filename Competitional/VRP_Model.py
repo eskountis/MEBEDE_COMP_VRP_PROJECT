@@ -33,7 +33,7 @@ class Model:
             for j in range(1, len(self.allNodes)):
                 a = self.allNodes[i]#from
                 b = self.allNodes[j]#to
-                dist = math.sqrt(math.pow(a.x - b.x, 2) + math.pow(a.y - b.y, 2))
+                dist = round(math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2))
                 time = dist / 35 # Converting km/h into h
                 if i != j:
                     if b.type == 1:
@@ -42,7 +42,7 @@ class Model:
                         time += 15/60
                     elif b.type == 3:
                         time += 25/60
-                self.matrix[i][j] = round(time, 1) #operator 1 needs round , 0,2 needs round ,1(remove prints), operator 0 needs round ,0
+                self.matrix[i][j] = time #operator 1 needs round , 0,2 needs round ,1(remove prints), operator 0 needs round ,0
 
 
 

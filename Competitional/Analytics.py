@@ -6,6 +6,42 @@ from Competitional import FileHandler
 from Competitional.Model import Model
 
 
+def visualize_clustering_construction(points, all_nodes):
+    x_points = [n.x for n in all_nodes]
+    y_points = [n.y for n in all_nodes]
+    plt.scatter(x_points, y_points)
+    mean_x_points = [p[0] for p in points] + [points[-1][0], points[0][0]]
+    mean_y_points = [p[1] for p in points] + [points[-1][1], points[0][1]]
+    plt.scatter(mean_x_points, mean_y_points, color="black")
+    # plt.plot(mean_x_points, mean_y_points, color="black")
+    # for p in points:
+    #     plt.plot([p[0], 50], [p[1], 50], color="black")
+    plt.savefig("0.png")
+    plt.close()
+
+
+def visualize_clustering_development(iteration, means, groups):
+    for i in range(len(means)):
+        x_points = [n.x for n in groups[i].nodes]
+        y_points = [n.y for n in groups[i].nodes]
+        plt.plot(x_points, y_points, ".-")
+    mean_x_points = [p[0] for p in means]
+    mean_y_points = [p[1] for p in means]
+    plt.scatter(mean_x_points, mean_y_points, color="black")
+    plt.savefig(str(iteration) + ".png")
+    plt.close()
+
+
+
+
+def scatter_nodes(all_nodes):
+    x_points = [n.x for n in all_nodes]
+    y_points = [n.y for n in all_nodes]
+    plt.scatter(x_points, y_points)
+    plt.show()
+    plt.close()
+
+
 def bar_chart(sol, time_matrix):
     width = 0.35
     stacks = []
@@ -51,8 +87,7 @@ def find_outliers(sol):
     # bar_chart(sol, time_matrix)
 
 
-def visualize_sol_evolvement(objectives):
-    plt.plot(np.arange(len(objectives)), objectives, '.-')
-
+def visualize_sol_evolvement(x_axis, objectives):
+    plt.plot(x_axis, objectives, '.-')
     plt.show()
     plt.close()
